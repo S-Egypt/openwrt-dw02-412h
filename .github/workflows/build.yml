@@ -1,14 +1,13 @@
-name: Build OpenWrt for AP152 (8MB)
+name: Build OpenWrt for DW02-412H (AP152, 8MB)
 
 on:
   workflow_dispatch: # Run manually from the Actions tab
 
 env:
-  # Using 22.03.6 because 23.05+ is usually too large for 8MB flash with 5GHz drivers
   VERSION: "22.03.6"
   TARGET: "ath79"
   SUBTARGET: "generic"
-  PROFILE_NAME: "qca_ap152" # Standard AP152 reference profile
+  PROFILE_NAME: "alfa-network_ap121f" # Closest AP152 reference
 
 jobs:
   build:
@@ -25,34 +24,27 @@ jobs:
 
     - name: Download and Extract OpenWrt Image Builder
       run: |
-        wget https://downloads.openwrt.org/releases/${{ env.VERSION }}/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/openwrt-imagebuilder-${{ env.VERSION }}-${{ env.TARGET }}-${{ env.SUBTARGET }}.Linux-x86_64.tar.xz
-        tar -xvf openwrt-imagebuilder-*.tar.xz
+        wget -O imagebuilder.tar.xz https://downloads.openwrt.org/releases/${{ env.VERSION }}/targets/${{ env.TARGET }}/${{ env.SUBTARGET }}/openwrt-imagebuilder-${{ env.VERSION }}-${{ env.TARGET }}-${{ env.SUBTARGET }}.Linux-x86_64.tar.xz
+        if [ ! -s imagebuilder.tar.xz ]; then echo "Download failed!"; exit 1; fi
+        tar -xvf imagebuilder.tar.xz
         mv openwrt-imagebuilder-*/ imagebuilder/
 
     - name: Verify AP152 Profile Name
       run: |
         cd imagebuilder
         echo "Searching for AP152 profiles in this OpenWrt release..."
-        make info | grep -i "ap152" || echo "Warning: No exact 'ap152' match found. Check make info."
-        
-        # We output the full list of profiles to a text file just in case
+        make info | grep -i "ap121"
         make info > ../openwrt_profiles_list.txt
 
     - name: Build Firmware
       run: |
         cd imagebuilder
-        
-        # EXTREME 8MB FLASH DIET:
-        # (+) QCA9557 2.4GHz & QCA9882 5GHz drivers + LuCI Web Interface
-        # (-) Removed IPv6, PPPoE, and USB support to free up megabytes of space
-        
+        # For 8MB flash: remove IPv6, PPP, USB, some luci apps, but keep essential network and management
         PACKAGES="kmod-ath9k kmod-ath10k ath10k-firmware-qca988x \
-        luci luci-theme-bootstrap luci-app-opkg \
+        luci luci-theme-bootstrap \
         -ipv6 -ip6tables -odhcp6c -kmod-ipv6 -kmod-ip6tables \
         -ppp -ppp-mod-pppoe -kmod-ppp -kmod-pppoe \
-        -kmod-usb-core -kmod-usb2 -kmod-usb3 \
-        -dnsmasq -dropbear"
-        
+        -kmod-usb-core -kmod-usb2 -kmod-usb3"
         make image PROFILE="${{ env.PROFILE_NAME }}" PACKAGES="$PACKAGES"
 
     - name: Organize Firmware Files
@@ -66,7 +58,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: success()
       with:
-        name: OpenWrt-AP152-Firmware
+        name: OpenWrt-DW02-412H-Firmware
         path: output_firmware/
 
     - name: Upload Profile List (For Troubleshooting)
